@@ -5,5 +5,5 @@ export const BONUSLY_GIVE_COMMAND =
 /** Official Slack desktop deep link — opens the native app directly on a DM with @nalbert. */
 export const SLACK_URL = "slack://user?team=E08DG2D8LBD&id=U0AFL2RMFM1";
 
-/** Public Buy Me a Coffee page. Leave empty until the page exists so the button is hidden. */
-export const BUY_ME_A_COFFEE_URL = "";
+/** Public Buy Me a Coffee page. */
+export const BUY_ME_A_COFFEE_URL = "https://buymeacoffee.com/NatiAlbert";

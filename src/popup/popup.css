@@ -597,3 +597,31 @@ button.danger-button:disabled {
 .support-status {
   color: var(--success-dark);
 }
+
+.bmc-support {
+  background-color: var(--warning);
+  color: #212529;
+}
+
+.bmc-support:hover {
+  background-color: var(--warning-dark);
+  color: white;
+}
+
+.support-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.support-divider::before,
+.support-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background-color: var(--border-strong);
+}

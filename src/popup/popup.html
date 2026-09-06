@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>WorkdayFill</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="disclaimer-banner">
+      This is an unofficial tool. Not affiliated with or endorsed by Workday.
+    </div>
+
+    <div class="header">
+      <div class="header-title">
+        <span class="header-icon">&#128197;</span>
+        <span>WorkdayFill</span>
+      </div>
+      <div id="userChip" class="user-chip" style="display: none;"></div>
+    </div>
+
+    <div id="wrongSiteMessage" class="notice notice-neutral">
+      Open the <strong>Enter Time</strong> page in your Workday tenant to use this extension.
+    </div>
+
+    <div id="selectorsStaleMessage" class="notice notice-warning" style="display: none;">
+      <strong>WorkdayFill needs an update.</strong> Workday's page changed and the extension can't find
+      the calendar yet. This is a known limitation — see the project README.
+    </div>
+
+    <div id="mainContent" class="container" style="display: none;">
+      <div id="pageStatus" class="notice notice-success">
+        <span id="pageStatusText">Detecting Enter Time…</span>
+      </div>
+
+      <div class="metric-row">
+        <div class="metric-card">
+          <div class="metric-label">Missing weekdays</div>
+          <div class="metric-value" id="missingCount">–</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Per day</div>
+          <div class="metric-value"><span id="hoursPreview">–</span><span class="metric-unit">h</span></div>
+        </div>
+      </div>
+
+      <div class="time-row">
+        <div class="setting-item">
+          <label for="inTime">In</label>
+          <input type="time" id="inTime" />
+        </div>
+        <div class="setting-item">
+          <label for="outTime">Out</label>
+          <input type="time" id="outTime" />
+        </div>
+      </div>
+
+      <button id="toggleAdvanced" class="link-button">Show advanced settings</button>
+      <div id="advancedPanel" class="advanced-panel" style="display: none;">
+        <div class="setting-item">
+          <label for="comment">Comment (optional)</label>
+          <input type="text" id="comment" placeholder="Add a note for these entries" />
+        </div>
+        <div class="setting-item">
+          <label for="safeTestDate">Safe test date (optional)</label>
+          <input type="date" id="safeTestDate" />
+          <span class="hint">When set, only this date will be written — everything else is skipped.</span>
+        </div>
+        <div class="setting-item">
+          <label for="throttleMs">Delay between days (ms)</label>
+          <input type="number" id="throttleMs" min="0" step="100" />
+        </div>
+      </div>
+
+      <label id="dryRunToggle" class="dry-run-toggle">
+        <span class="dry-run-label">
+          <span class="dry-run-icon">&#128737;&#65039;</span>
+          Dry run — checks the day and Time Type only, saves nothing
+        </span>
+        <input type="checkbox" id="dryRun" />
+      </label>
+      <p class="hint" style="margin: -6px 0 0;">
+        Workday commits an entry as soon as In/Out are both filled in — Cancel afterward can't undo
+        that. Dry run never types into those fields, so it can't preview the saved hours; turn it
+        off to actually fill a day.
+      </p>
+
+      <button id="fillAll" class="primary-button">Fill all missing days</button>
+
+      <div class="days-header">
+        <span>Missing days</span>
+        <button id="toggleDays" class="link-button">Show days</button>
+      </div>
+      <div class="missing-days" id="missingDays" style="display: none;">
+        <div class="loading" id="loading">Loading missing days…</div>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div id="progressContainer" style="display: none;">
+        <div id="progressBar"></div>
+      </div>
+
+      <button id="aboutButton" class="link-button">About</button>
+      <div id="aboutInfo" class="about-info" style="display: none;">
+        <p>
+          <strong>Disclaimer:</strong> this is a third-party tool and is not affiliated with, endorsed by,
+          or connected to Workday in any way. It automates your own browser session — it never stores or
+          transmits your credentials.
+        </p>
+        <p>Version: <span id="version"></span></p>
+        <p><a href="/privacy.html" target="_blank">Privacy policy</a></p>
+      </div>
+    </div>
+
+    <script type="module" src="popup.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,61 @@
+/** One calendar cell on the Enter Time page, reduced to plain data. */
+export interface DayCell {
+  /** ISO date, e.g. '2026-09-24'. */
+  date: string;
+  /** 0=Sun .. 6=Sat, derived from `date`. */
+  dow: number;
+  isWeekend: boolean;
+  isHoliday: boolean;
+  isTimeOff: boolean;
+  /** Already has a "Hours Worked" (or equivalent) entry. */
+  hasEntry: boolean;
+  /** False for spillover days from adjacent months shown on the calendar grid. */
+  inMonth: boolean;
+}
+
+export interface FillOptions {
+  includeWeekends: boolean;
+  includeHolidays: boolean;
+  includeFuture: boolean;
+  fromDate: string | null;
+  toDate: string | null;
+  /** ISO date treated as "today"; injected for deterministic tests. */
+  today: string;
+}
+
+export interface Settings {
+  inTime: string;
+  outTime: string;
+  timeType: string;
+  comment: string;
+  dryRun: boolean;
+  /** When set, only this date may be written to — a development safety rail. */
+  safeTestDate: string | null;
+  throttleMs: number;
+  modalTimeoutMs: number;
+  validateTimeoutMs: number;
+  maxDaysPerRun: number;
+}
+
+export type FillStatus = "filled" | "skipped" | "dryRun" | "error";
+
+export interface FillResult {
+  date: string;
+  status: FillStatus;
+  message?: string;
+}
+
+export interface FillSummary {
+  total: number;
+  filled: number;
+  skipped: number;
+  failed: number;
+  failures: { date: string; message: string }[];
+  remaining: string[];
+}
+
+export interface PageInfo {
+  isEnterTime: boolean;
+  workerName: string | null;
+  month: { label: string; year: number; monthIndex: number } | null;
+}

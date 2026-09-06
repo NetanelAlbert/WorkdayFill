@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { computeHours, formatHM, parseHM, splitTimeParts, to12Hour } from "../src/core/time";
+import {
+  computeHours,
+  formatHM,
+  parseHM,
+  splitTimeParts,
+  to12Hour,
+  toWorkdayDateString,
+} from "../src/core/time";
 
 describe("parseHM", () => {
   it("parses a valid 24h time", () => {
@@ -65,5 +72,16 @@ describe("splitTimeParts", () => {
 
   it("throws on a malformed ISO date", () => {
     expect(() => splitTimeParts("09:00", "not-a-date")).toThrow();
+  });
+});
+
+describe("toWorkdayDateString", () => {
+  it("formats an ISO date as Workday's modal-header format", () => {
+    expect(toWorkdayDateString("2026-09-01")).toBe("09/01/2026");
+    expect(toWorkdayDateString("2026-09-30")).toBe("09/30/2026");
+  });
+
+  it("throws on a malformed ISO date", () => {
+    expect(() => toWorkdayDateString("not-a-date")).toThrow();
   });
 });

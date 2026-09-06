@@ -1,9 +1,10 @@
-import { computeHours, todayLocalIso } from "../../core/time";
+import { computeHours, todayLocalIso, toWorkdayDateString } from "../../core/time";
 import { computeMissingDays, DEFAULT_FILL_OPTIONS } from "../../core/missing-days";
-import type { FillResult, FillSummary, PageInfo, Settings } from "../../core/types";
+import type { DeleteResult, DeleteSummary, FillResult, FillSummary, PageInfo, Settings } from "../../core/types";
 import {
   fireCellOpen,
   fireCellSelect,
+  fireMouseSequence,
   setTextField,
   setTimeField,
   sleep,
@@ -13,7 +14,15 @@ import {
 } from "../dom";
 import { detectPage as detectPageDom } from "../page";
 import { findCellElementForDate, scanCalendar } from "../scan";
-import { findEnterTimeButton, findOkButton, SELECTORS, TOAST_SAVED_TEXT } from "../selectors";
+import {
+  findButtonByText,
+  findChevronForCell,
+  findEnterTimeButton,
+  findOkButton,
+  findPopoverEntries,
+  SELECTORS,
+  TOAST_SAVED_TEXT,
+} from "../selectors";
 import type { FillEngine } from "./FillEngine";
 
 /**
@@ -281,6 +290,136 @@ export class DomFillEngine implements FillEngine {
     return {
       total: initialTotal,
       filled,
+      skipped,
+      failed: failures.length,
+      failures,
+      remaining,
+    };
+  }
+
+  async getDeletableDays(): Promise<string[]> {
+    return scanCalendar(this.doc)
+      .filter((d) => d.inMonth && d.hasEntry)
+      .map((d) => d.date)
+      .sort();
+  }
+
+  async deleteDay(date: string): Promise<DeleteResult> {
+    const { doc } = this;
+
+    const cellEl = findCellElementForDate(date, doc);
+    if (!cellEl) {
+      return { date, status: "error", message: "day cell not found on the calendar" };
+    }
+
+    const beforeCount = scanCalendar(doc).find((d) => d.date === date)?.eventCount ?? 0;
+
+    const chevron = findChevronForCell(cellEl, doc);
+    if (!chevron) {
+      return { date, status: "skipped", message: "day has no events to delete" };
+    }
+
+    try {
+      fireMouseSequence(chevron);
+      await waitForElement(SELECTORS.popoverCloseButton, { root: doc, timeout: 3000 });
+
+      // The popover automation-id is shared by every cell on the page, so entries must be found
+      // scoped to THIS popover (findPopoverEntries) and identified by their own accessible label
+      // ("Not Submitted | Hours Worked | ..."), not just "the first entry" — a day can also show
+      // holiday/Time-Period-End rows that must not be touched.
+      const entry = findPopoverEntries(doc).find((el) => el.getAttribute("aria-label")?.includes("Hours Worked"));
+      if (!entry) {
+        doc.querySelector<HTMLElement>(SELECTORS.popoverCloseButton)?.click();
+        return { date, status: "skipped", message: "no Hours Worked entry for this day" };
+      }
+
+      fireMouseSequence(entry);
+      const modal = await waitForElement(SELECTORS.modal, { root: doc, timeout: 5000 });
+
+      const expectedDate = toWorkdayDateString(date);
+      if (!modal.textContent?.includes(expectedDate)) {
+        await cleanupModal(doc);
+        return {
+          date,
+          status: "error",
+          message: `opened dialog shows a different date than expected (wanted ${expectedDate})`,
+        };
+      }
+
+      const deleteBtn = findButtonByText(modal, "Delete");
+      if (!deleteBtn) {
+        await cleanupModal(doc);
+        return { date, status: "error", message: "Delete button not found in the entry dialog" };
+      }
+      deleteBtn.click();
+
+      const confirmModal = await waitForElement(SELECTORS.modal, { root: doc, timeout: 3000 });
+      if (!confirmModal.textContent?.includes("Delete Time Block")) {
+        await cleanupModal(doc);
+        return {
+          date,
+          status: "error",
+          message: "expected a 'Delete Time Block' confirmation dialog but got something else",
+        };
+      }
+      const okBtn = findButtonByText(confirmModal, "OK");
+      if (!okBtn) {
+        return { date, status: "error", message: "confirmation OK button not found" };
+      }
+      okBtn.click();
+
+      // Compare event COUNT, not the hasEntry flag: a day with a holiday marker alongside the
+      // deleted entry still has hasEntry===true afterward (the holiday's own accrual remains) —
+      // confirmed live (Sep 13-style days). A strict count decrease is the only reliable signal
+      // that works for both a plain day (1 -> 0) and a holiday-combo day (3 -> 2).
+      const deleted = await pollUntil(
+        () => (scanCalendar(doc).find((d) => d.date === date)?.eventCount ?? beforeCount) < beforeCount,
+        { timeout: 5000, intervalMs: 300 },
+      );
+      if (!deleted) {
+        return { date, status: "error", message: "entry still present after confirming delete" };
+      }
+
+      return { date, status: "deleted" };
+    } catch (error) {
+      await cleanupModal(doc);
+      return { date, status: "error", message: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  async deleteAllDays(
+    onProgress?: (percentage: number, result: DeleteResult) => void,
+  ): Promise<DeleteSummary> {
+    const processed = new Set<string>();
+    const failures: { date: string; message: string }[] = [];
+    let deleted = 0;
+    let skipped = 0;
+
+    const initialTotal = (await this.getDeletableDays()).length;
+    let done = 0;
+
+    while (true) {
+      const remaining = (await this.getDeletableDays()).filter((d) => !processed.has(d));
+      const date = remaining[0];
+      if (!date) break;
+
+      const result = await this.deleteDay(date);
+      processed.add(date);
+      done += 1;
+
+      if (result.status === "deleted") deleted += 1;
+      else if (result.status === "skipped") skipped += 1;
+      else failures.push({ date, message: result.message ?? "unknown error" });
+
+      onProgress?.(Math.min(100, Math.round((done / Math.max(initialTotal, done)) * 100)), result);
+
+      await sleep(800);
+    }
+
+    const remaining = await this.getDeletableDays();
+    return {
+      total: initialTotal,
+      deleted,
       skipped,
       failed: failures.length,
       failures,

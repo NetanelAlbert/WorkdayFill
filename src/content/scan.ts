@@ -79,6 +79,7 @@ export function readCell(el: Element, displayedMonthIndex: number, displayedYear
     isTimeOff,
     hasEntry,
     inMonth: cellMonthIndex === displayedMonthIndex,
+    eventCount,
   };
 }
 

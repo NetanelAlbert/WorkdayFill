@@ -41,6 +41,16 @@ export function todayLocalIso(): string {
   return `${y}-${m}-${day}`;
 }
 
+/** Formats an ISO 'YYYY-MM-DD' date as Workday's own modal-header format, 'MM/DD/YYYY'. */
+export function toWorkdayDateString(isoDate: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate.trim());
+  if (!match) {
+    throw new Error(`Invalid ISO date '${isoDate}', expected 'YYYY-MM-DD'`);
+  }
+  const [, year, month, day] = match as unknown as [string, string, string, string];
+  return `${month}/${day}/${year}`;
+}
+
 /** Computes worked hours between two 24h 'HH:mm' times, rounded to 1 decimal place. */
 export function computeHours(inHHMM: string, outHHMM: string): number {
   const start = parseHM(inHHMM);

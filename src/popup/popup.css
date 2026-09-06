@@ -385,3 +385,67 @@ button.primary-button:disabled {
 .about-info a {
   color: var(--primary);
 }
+
+.danger-link {
+  color: var(--danger);
+}
+
+.danger-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background-color: rgba(230, 57, 70, 0.08);
+  border: 1px solid rgba(230, 57, 70, 0.3);
+  border-radius: var(--radius-md);
+  padding: 12px;
+}
+
+.danger-panel .hint {
+  color: var(--danger);
+}
+
+button.danger-button {
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background-color: var(--danger);
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+button.danger-button:hover:not(:disabled) {
+  background-color: #c62d39;
+}
+
+button.danger-button:disabled {
+  background-color: var(--border-strong);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.support-footer {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.support-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.support-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.support-status {
+  margin: 6px 0 0;
+}

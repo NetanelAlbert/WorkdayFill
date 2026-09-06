@@ -1,4 +1,4 @@
-import type { FillResult, FillSummary, PageInfo, Settings } from "../../core/types";
+import type { DeleteResult, DeleteSummary, FillResult, FillSummary, PageInfo, Settings } from "../../core/types";
 
 /**
  * Strategy interface for filling attendance days. `DomFillEngine` (Approach A) implements this by
@@ -13,4 +13,13 @@ export interface FillEngine {
     settings: Settings,
     onProgress?: (percentage: number, result: FillResult) => void,
   ): Promise<FillSummary>;
+  /**
+   * Days with at least one real "Hours Worked" entry that can be deleted — a cheap pre-filter;
+   * deleteDay does the authoritative per-day check, mirroring getMissingDays/fillDay.
+   */
+  getDeletableDays(): Promise<string[]>;
+  deleteDay(date: string): Promise<DeleteResult>;
+  deleteAllDays(
+    onProgress?: (percentage: number, result: DeleteResult) => void,
+  ): Promise<DeleteSummary>;
 }

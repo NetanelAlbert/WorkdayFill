@@ -60,6 +60,24 @@ export const SELECTORS = {
    */
   detailPageCommandButtons: '[data-automation-id="wd-CommandButton"]',
 
+  /**
+   * Delete flow, confirmed live end-to-end with zero real (trusted) clicks required — every step
+   * responds to a synthetic pointerdown/mousedown/pointerup/mouseup/click sequence. A cell with an
+   * existing entry shows this "more" chevron; clicking it opens a small popover listing that day's
+   * events (holiday markers, Time Period End, and/or a real "Hours Worked" entry). Shares its
+   * automation-id across every day cell — must be matched to the target cell by position.
+   */
+  dayChevron: '[data-automation-id="calendarMoreLink"]',
+  /** The popover's own close (X) button — its parent element is the popover's scope. */
+  popoverCloseButton: '[data-automation-id="closeButton"]',
+  /**
+   * An entry row inside an open popover. CRITICAL: this automation-id is shared by EVERY entry
+   * chip across the entire calendar grid, not just the open popover's — `document.querySelector`
+   * on this alone silently grabs an unrelated entry elsewhere on the page. Always scope the query
+   * to the popover container (see findPopoverEntries) before matching, never search document-wide.
+   */
+  popoverEntry: '[data-automation-id="calendarevent"]',
+
   // Feedback
   /** UNVERIFIED — a real save (Sep 28, 2026 test) completed and dismissed before this could be
    *  captured. Not load-bearing: modal-gone + re-scanned cell.hasEntry is the CONFIRMED primary
@@ -115,4 +133,40 @@ export function findEnterTimeButton(doc: Document): HTMLElement | null {
     if (el.textContent?.trim() === "Enter Time") return el;
   }
   return null;
+}
+
+/** Finds a button by its exact visible text, anywhere under `root`. */
+export function findButtonByText(root: ParentNode, text: string): HTMLElement | null {
+  for (const el of root.querySelectorAll<HTMLElement>("button")) {
+    if (el.textContent?.trim() === text) return el;
+  }
+  return null;
+}
+
+/**
+ * Finds the "more" chevron for a specific day cell by position (matched by horizontal overlap
+ * with the cell and vertical proximity below it) — confirmed live, `dayChevron`'s automation-id is
+ * shared by every cell, so there is no direct id-based way to target one day's chevron.
+ */
+export function findChevronForCell(cellEl: Element, doc: Document): HTMLElement | null {
+  const r = cellEl.getBoundingClientRect();
+  for (const el of doc.querySelectorAll<HTMLElement>(SELECTORS.dayChevron)) {
+    const er = el.getBoundingClientRect();
+    const cx = er.left + er.width / 2;
+    if (cx >= r.left && cx <= r.right && er.top >= r.top && er.top <= r.bottom + 40) {
+      return el;
+    }
+  }
+  return null;
+}
+
+/**
+ * Returns the entry rows inside a currently-open popover, scoped via the popover's own close
+ * button — never search `popoverEntry` document-wide (see its comment above).
+ */
+export function findPopoverEntries(doc: Document): HTMLElement[] {
+  const closeBtn = doc.querySelector<HTMLElement>(SELECTORS.popoverCloseButton);
+  const popover = closeBtn?.parentElement;
+  if (!popover) return [];
+  return [...popover.querySelectorAll<HTMLElement>(SELECTORS.popoverEntry)];
 }

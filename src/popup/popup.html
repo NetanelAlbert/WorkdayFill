@@ -100,6 +100,25 @@
         <div id="progressBar"></div>
       </div>
 
+      <button id="toggleDanger" class="link-button danger-link">Show danger zone</button>
+      <div id="dangerPanel" class="danger-panel" style="display: none;">
+        <p class="hint">
+          Permanently deletes real "Hours Worked" entries from Workday for this month. Holiday
+          markers and the Time Period End boundary are never touched, and this cannot be undone by
+          WorkdayFill — only by re-entering the hours yourself.
+        </p>
+        <div class="notice notice-neutral">
+          <span id="deletableCountText">Checking for deletable days…</span>
+        </div>
+        <div class="setting-item">
+          <label for="deleteConfirmInput">Type DELETE to confirm</label>
+          <input type="text" id="deleteConfirmInput" placeholder="DELETE" autocomplete="off" />
+        </div>
+        <button id="deleteAllButton" class="danger-button" disabled>
+          Delete all Hours Worked entries this month
+        </button>
+      </div>
+
       <button id="aboutButton" class="link-button">About</button>
       <div id="aboutInfo" class="about-info" style="display: none;">
         <p>
@@ -109,8 +128,21 @@
         </p>
         <p>Version: <span id="version"></span></p>
         <p><a href="/privacy.html" target="_blank">Privacy policy</a></p>
+        <p class="support-links">
+          <a class="link-button bonusly-support" href="slack://open">Give a Bonusly in Slack</a>
+          <a class="link-button bmc-support" hidden target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+        </p>
       </div>
     </div>
+
+    <footer class="support-footer">
+      <span class="support-label">Support this tool</span>
+      <div class="support-links">
+        <a class="link-button bonusly-support" href="slack://open">Give a Bonusly in Slack</a>
+        <a class="link-button bmc-support" hidden target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+      </div>
+      <p id="supportStatus" class="hint support-status" hidden></p>
+    </footer>
 
     <script type="module" src="popup.ts"></script>
   </body>

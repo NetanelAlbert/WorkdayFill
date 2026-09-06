@@ -67,6 +67,42 @@ async function handleRequest(request: Request): Promise<Response> {
       return { success: true, summary };
     }
 
+    case "getDeletableDays": {
+      const deletableDays = await engine.getDeletableDays();
+      return { deletableDays };
+    }
+
+    case "deleteSingleDay": {
+      const result = await engine.deleteDay(request.date);
+      if (result.status === "error") {
+        console.error("[WorkdayFill] deleteSingleDay failed:", result.date, result.message);
+      } else {
+        console.log("[WorkdayFill] deleteSingleDay:", result.date, result.status);
+      }
+      return { success: true, deleteResult: result };
+    }
+
+    case "deleteAllDays": {
+      const summary = await engine.deleteAllDays((percentage, result) => {
+        if (result.status === "error") {
+          console.error("[WorkdayFill] deleteAllDays step failed:", result.date, result.message);
+        } else {
+          console.log("[WorkdayFill] deleteAllDays step:", result.date, result.status);
+        }
+        const progress: ProgressMessage = {
+          action: "updateProgress",
+          percentage,
+          date: result.date,
+          status: result.status,
+        };
+        chrome.runtime.sendMessage(progress).catch(() => {
+          // The popup may be closed — progress updates are best-effort.
+        });
+      });
+      console.log("[WorkdayFill] deleteAllDays summary:", summary);
+      return { success: true, deleteSummary: summary };
+    }
+
     default: {
       const exhaustive: never = request;
       return { error: `Unknown action: ${JSON.stringify(exhaustive)}` };

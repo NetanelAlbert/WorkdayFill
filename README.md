@@ -6,6 +6,10 @@ endorsed by Workday.
 
 See [RESEARCH.md](RESEARCH.md) for the reverse-engineering notes this implementation is built on.
 
+If the extension saves you time, the popup has optional support links: give a Bonusly in the Slack
+desktop app (copies `/give +100 @nalbert Thanks for the Workday extension #own-it`), or buy a coffee
+once that page is set up.
+
 ## How it works (Approach A — DOM automation)
 
 Workday's Enter Time save flow is a stateful, token-guarded Spring-WebFlow sequence (see RESEARCH.md
@@ -72,6 +76,21 @@ double-click on an unselected cell, does not reliably open it (`DomFillEngine.op
   save toast itself dismissed before it could be captured, so `SELECTORS.toast` remains a best-effort,
   unconfirmed secondary signal — not load-bearing, since modal-gone + re-scanned `hasEntry` (now
   proven live) is the primary commit check `fillDay` relies on.
+- **2026-09-03**: bulk-deleted a full month of test entries by hand to reset the tenant for further
+  testing, which mapped out the delete flow: a cell with an existing entry shows a "more" chevron
+  (`calendarMoreLink`, shared across every cell — must be matched to the target cell by position, see
+  `findChevronForCell`); clicking it opens a small popover listing that day's events, scoped via the
+  popover's own close button (`popoverEntry`'s automation-id is shared by every entry chip on the whole
+  page, so it must never be queried document-wide — see `findPopoverEntries`); the popover's own entry
+  row opens an edit dialog with a `Delete` button, which pops Workday's own `Delete Time Block?`
+  confirmation. Initially concluded the popover's entry row needed a genuine trusted click (two separate
+  synthetic-event attempts did nothing) — that conclusion was wrong: both attempts queried the shared
+  `popoverEntry` selector document-wide and fired events on an unrelated entry elsewhere on the page.
+  Once scoped correctly, the entire flow (chevron → entry → Delete → confirm OK) works with a fully
+  synthetic pointerdown/mousedown/pointerup/mouseup/click sequence — no real click ever required. A day
+  with a holiday marker alongside a real entry still reports `hasEntry: true` after that entry is
+  deleted (the holiday's own accrual remains), so delete verification compares the cell's raw event
+  count before/after rather than the `hasEntry` flag.
 
 ## Live-testing safety
 
@@ -86,10 +105,20 @@ rehearsal of that specific write.
 1. **Use a safe test date.** The advanced settings panel has a "safe test date" field — when set, every
    other missing day is skipped, so a single-day test can't accidentally touch the rest of the month.
 2. **Verify one real fill** on that safe test date with dry run off: confirm the cell now shows 8.6h and
-   "Not Submitted", then delete that draft in Workday's own UI to reset if it was only a test (WorkdayFill
-   never deletes entries itself).
+   "Not Submitted". If it was only a test, the popup's danger zone (below) can remove it again.
 3. Only then try **Fill all missing days**, for real — `maxDaysPerRun` (in `core/settings.ts`, default
    40) caps a single run.
+
+## Deleting entries (danger zone)
+
+The popup's collapsed "danger zone" section permanently deletes every real "Hours Worked" entry for the
+visible month — the same mechanism validated in the verification log below, now behind a type-`DELETE`-
+to-confirm gate. Holiday markers and the "Time Period End" boundary are never touched (only entries whose
+own popover row says "Hours Worked" are matched); a day that turns out to have nothing deletable is
+skipped, not errored. There is no dry run for delete — Workday's own "Delete Time Block?" confirmation is
+the only checkpoint, and the action is irreversible from WorkdayFill's side (re-entering the hours is a
+normal fill, done through the same popup). Use `deleteDay`/`getDeletableDays` directly if you need finer
+control than the bulk button.
 
 ## Testing strategy
 

@@ -11,6 +11,13 @@ export interface DayCell {
   hasEntry: boolean;
   /** False for spillover days from adjacent months shown on the calendar grid. */
   inMonth: boolean;
+  /**
+   * Raw event count parsed from the cell's aria-label (e.g. "2 events" -> 2). Used to verify a
+   * delete actually removed something on days that carry more than one event (e.g. a holiday
+   * marker alongside a real Hours Worked entry) — `hasEntry` alone can't tell, since it stays
+   * true as long as any non-boundary event remains.
+   */
+  eventCount: number;
 }
 
 export interface FillOptions {
@@ -38,6 +45,7 @@ export interface Settings {
 }
 
 export type FillStatus = "filled" | "skipped" | "dryRun" | "error";
+export type DeleteStatus = "deleted" | "skipped" | "error";
 
 export interface FillResult {
   date: string;
@@ -48,6 +56,21 @@ export interface FillResult {
 export interface FillSummary {
   total: number;
   filled: number;
+  skipped: number;
+  failed: number;
+  failures: { date: string; message: string }[];
+  remaining: string[];
+}
+
+export interface DeleteResult {
+  date: string;
+  status: DeleteStatus;
+  message?: string;
+}
+
+export interface DeleteSummary {
+  total: number;
+  deleted: number;
   skipped: number;
   failed: number;
   failures: { date: string; message: string }[];

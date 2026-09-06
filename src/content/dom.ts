@@ -6,12 +6,14 @@ export function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Fires a full pointerdown/mousedown/pointerup/mouseup/click sequence, confirmed live to be
- * necessary for Workday's calendar cell: a plain `el.click()` (a single synthetic 'click' event
- * with no preceding pointer/mouse events) does NOT trigger its selection state at all — the
- * widget must be listening lower in the event pipeline than 'click' alone.
+ * Fires a full pointerdown/mousedown/pointerup/mouseup/click sequence. Confirmed live to be
+ * necessary for Workday's custom calendar widgets — a plain `el.click()` (a single synthetic
+ * 'click' event with no preceding pointer/mouse events) does NOT trigger them at all, whether
+ * that's a calendar cell's selection state, a day's "more" chevron, or a popover's entry row —
+ * the widgets must be listening lower in the event pipeline than 'click' alone. This is exported
+ * because it's reused across all of those, not just cell selection.
  */
-function fireMouseSequence(el: Element, detail: number): void {
+export function fireMouseSequence(el: Element, detail = 1): void {
   const base: MouseEventInit = { bubbles: true, cancelable: true, view: window, detail };
   el.dispatchEvent(new PointerEvent("pointerdown", base));
   el.dispatchEvent(new MouseEvent("mousedown", base));

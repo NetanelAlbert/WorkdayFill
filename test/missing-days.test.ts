@@ -11,6 +11,7 @@ function day(overrides: Partial<DayCell> = {}): DayCell {
     isTimeOff: false,
     hasEntry: false,
     inMonth: true,
+    eventCount: 0,
     ...overrides,
   };
 }

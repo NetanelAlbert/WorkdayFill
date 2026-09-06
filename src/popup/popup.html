@@ -6,10 +6,6 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <div class="disclaimer-banner">
-      This is an unofficial tool. Not affiliated with or endorsed by Workday.
-    </div>
-
     <div class="header">
       <div class="header-title">
         <span class="header-icon">&#128197;</span>
@@ -17,14 +13,51 @@
       </div>
       <div id="userChip" class="user-chip" style="display: none;"></div>
     </div>
-
-    <div id="wrongSiteMessage" class="notice notice-neutral">
-      Open the <strong>Enter Time</strong> page in your Workday tenant to use this extension.
+    <div class="disclaimer-banner">
+      Unofficial tool — not affiliated with or endorsed by Workday.
     </div>
 
-    <div id="selectorsStaleMessage" class="notice notice-warning" style="display: none;">
-      <strong>WorkdayFill needs an update.</strong> Workday's page changed and the extension can't find
-      the calendar yet. This is a known limitation — see the project README.
+    <div id="wrongSiteMessage" class="empty-state">
+      <span class="empty-state-icon">&#128193;</span>
+      <span class="empty-state-title">Not a Workday tab</span>
+      <span class="empty-state-text">
+        Open your Workday tenant's <strong>Enter Time</strong> page, then reopen WorkdayFill.
+      </span>
+      <div class="quick-link-row">
+        <input
+          type="url"
+          id="wrongSiteEnterTimeUrlInput"
+          placeholder="Or paste your Enter Time link to save a shortcut"
+        />
+        <button id="wrongSiteOpenEnterTimeButton" class="primary-button quick-link-button" disabled>
+          Go
+        </button>
+      </div>
+    </div>
+
+    <div id="notEnterTimeMessage" class="empty-state" style="display: none;">
+      <span class="empty-state-icon">&#128197;</span>
+      <span class="empty-state-title">Enter Time not detected</span>
+      <span class="empty-state-text">
+        From your Workday home, search or navigate to <strong>Enter Time</strong> to open the calendar.
+      </span>
+      <div class="quick-link-row">
+        <input
+          type="url"
+          id="enterTimeUrlInput"
+          placeholder="Or paste your Enter Time link to save a shortcut"
+        />
+        <button id="openEnterTimeButton" class="primary-button quick-link-button" disabled>Go</button>
+      </div>
+    </div>
+
+    <div id="selectorsStaleMessage" class="empty-state empty-state-warning" style="display: none;">
+      <span class="empty-state-icon">&#9888;&#65039;</span>
+      <span class="empty-state-title">WorkdayFill needs an update</span>
+      <span class="empty-state-text">
+        Workday's page changed and the extension can't find the calendar yet. This is a known
+        limitation — see the project README.
+      </span>
     </div>
 
     <div id="mainContent" class="container" style="display: none;">
@@ -54,45 +87,7 @@
         </div>
       </div>
 
-      <button id="toggleAdvanced" class="link-button">Show advanced settings</button>
-      <div id="advancedPanel" class="advanced-panel" style="display: none;">
-        <div class="setting-item">
-          <label for="comment">Comment (optional)</label>
-          <input type="text" id="comment" placeholder="Add a note for these entries" />
-        </div>
-        <div class="setting-item">
-          <label for="safeTestDate">Safe test date (optional)</label>
-          <input type="date" id="safeTestDate" />
-          <span class="hint">When set, only this date will be written — everything else is skipped.</span>
-        </div>
-        <div class="setting-item">
-          <label for="throttleMs">Delay between days (ms)</label>
-          <input type="number" id="throttleMs" min="0" step="100" />
-        </div>
-      </div>
-
-      <label id="dryRunToggle" class="dry-run-toggle">
-        <span class="dry-run-label">
-          <span class="dry-run-icon">&#128737;&#65039;</span>
-          Dry run — checks the day and Time Type only, saves nothing
-        </span>
-        <input type="checkbox" id="dryRun" />
-      </label>
-      <p class="hint" style="margin: -6px 0 0;">
-        Workday commits an entry as soon as In/Out are both filled in — Cancel afterward can't undo
-        that. Dry run never types into those fields, so it can't preview the saved hours; turn it
-        off to actually fill a day.
-      </p>
-
       <button id="fillAll" class="primary-button">Fill all missing days</button>
-
-      <div class="days-header">
-        <span>Missing days</span>
-        <button id="toggleDays" class="link-button">Show days</button>
-      </div>
-      <div class="missing-days" id="missingDays" style="display: none;">
-        <div class="loading" id="loading">Loading missing days…</div>
-      </div>
 
       <div class="status" id="status"></div>
 
@@ -100,26 +95,94 @@
         <div id="progressBar"></div>
       </div>
 
-      <button id="toggleDanger" class="link-button danger-link">Show danger zone</button>
-      <div id="dangerPanel" class="danger-panel" style="display: none;">
-        <p class="hint">
-          Permanently deletes real "Hours Worked" entries from Workday for this month. Holiday
-          markers and the Time Period End boundary are never touched, and this cannot be undone by
-          WorkdayFill — only by re-entering the hours yourself.
-        </p>
-        <div class="notice notice-neutral">
-          <span id="deletableCountText">Checking for deletable days…</span>
-        </div>
-        <div class="setting-item">
-          <label for="deleteConfirmInput">Type DELETE to confirm</label>
-          <input type="text" id="deleteConfirmInput" placeholder="DELETE" autocomplete="off" />
-        </div>
-        <button id="deleteAllButton" class="danger-button" disabled>
-          Delete all Hours Worked entries this month
+      <div class="disclosure">
+        <button id="toggleDays" class="disclosure-row" aria-expanded="false">
+          <span>Missing days</span>
+          <span class="chevron">&#9656;</span>
         </button>
+        <div class="missing-days" id="missingDays" style="display: none;">
+          <div class="loading" id="loading">Loading missing days…</div>
+        </div>
       </div>
 
-      <button id="aboutButton" class="link-button">About</button>
+      <div class="disclosure">
+        <button id="toggleAdvanced" class="disclosure-row" aria-expanded="false">
+          <span>Advanced</span>
+          <span class="chevron">&#9656;</span>
+        </button>
+        <div id="advancedPanel" class="advanced-panel" style="display: none;">
+          <label id="dryRunToggle" class="dry-run-toggle">
+            <span class="dry-run-label">
+              <span class="dry-run-icon">&#128737;&#65039;</span>
+              Dry run — checks the day and Time Type only, saves nothing
+            </span>
+            <input type="checkbox" id="dryRun" />
+          </label>
+          <p class="hint">
+            Workday commits an entry as soon as In/Out are filled in, so Cancel can't undo it. Leave
+            dry run off to actually fill a day.
+          </p>
+
+          <div class="setting-item">
+            <label for="comment">Comment (optional)</label>
+            <input type="text" id="comment" placeholder="Add a note for these entries" />
+          </div>
+          <div class="setting-item">
+            <label for="safeTestDate">Safe test date (optional)</label>
+            <input type="date" id="safeTestDate" />
+            <span class="hint">When set, only this date will be written — everything else is skipped.</span>
+          </div>
+          <div class="setting-item">
+            <label for="throttleMs">Delay between days (ms)</label>
+            <input type="number" id="throttleMs" min="0" step="100" />
+          </div>
+
+          <div class="advanced-divider"></div>
+
+          <div class="disclosure">
+            <button id="toggleDanger" class="disclosure-row danger-row" aria-expanded="false">
+              <span>Danger zone</span>
+              <span class="chevron">&#9656;</span>
+            </button>
+            <div id="dangerPanel" class="danger-panel" style="display: none;">
+              <p class="hint">
+                Permanently deletes real "Hours Worked" entries from Workday for this month. Holiday
+                markers and the Time Period End boundary are never touched, and this cannot be undone
+                by WorkdayFill — only by re-entering the hours yourself.
+              </p>
+              <div class="notice notice-neutral">
+                <span id="deletableCountText">Checking for deletable days…</span>
+              </div>
+              <div class="setting-item">
+                <label for="deleteConfirmInput">Type DELETE to confirm</label>
+                <input type="text" id="deleteConfirmInput" placeholder="DELETE" autocomplete="off" />
+              </div>
+              <button id="deleteAllButton" class="danger-button" disabled>
+                Delete all Hours Worked entries this month
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="support-card">
+      <span class="support-label">&#128153; Enjoy WorkdayFill? Send a Bonusly</span>
+      <code id="bonuslyCommand" class="support-command"></code>
+      <a id="bonuslySupportLink" class="primary-button support-button" href="slack://open">
+        Copy command &amp; message me in Slack
+      </a>
+      <p id="supportHint" class="hint"></p>
+      <p id="supportStatus" class="hint support-status" hidden></p>
+      <a class="link-button bmc-support" hidden target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
+    </div>
+
+    <div class="disclosure">
+      <button id="aboutButton" class="disclosure-row" aria-expanded="false">
+        <span>About</span>
+        <span class="chevron">&#9656;</span>
+      </button>
       <div id="aboutInfo" class="about-info" style="display: none;">
         <p>
           <strong>Disclaimer:</strong> this is a third-party tool and is not affiliated with, endorsed by,
@@ -127,22 +190,10 @@
           transmits your credentials.
         </p>
         <p>Version: <span id="version"></span></p>
+        <p><a href="https://github.com/NetanelAlbert/WorkdayFill" target="_blank" rel="noopener noreferrer">GitHub</a></p>
         <p><a href="/privacy.html" target="_blank">Privacy policy</a></p>
-        <p class="support-links">
-          <a class="link-button bonusly-support" href="slack://open">Give a Bonusly in Slack</a>
-          <a class="link-button bmc-support" hidden target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
-        </p>
       </div>
     </div>
-
-    <footer class="support-footer">
-      <span class="support-label">Support this tool</span>
-      <div class="support-links">
-        <a class="link-button bonusly-support" href="slack://open">Give a Bonusly in Slack</a>
-        <a class="link-button bmc-support" hidden target="_blank" rel="noopener noreferrer">Buy me a coffee</a>
-      </div>
-      <p id="supportStatus" class="hint support-status" hidden></p>
-    </footer>
 
     <script type="module" src="popup.ts"></script>
   </body>

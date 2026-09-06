@@ -7,7 +7,7 @@ endorsed by Workday.
 See [RESEARCH.md](RESEARCH.md) for the reverse-engineering notes this implementation is built on.
 
 If the extension saves you time, the popup has optional support links: give a Bonusly in the Slack
-desktop app (copies `/give +100 @nalbert Thanks for the Workday extension #own-it`), or buy a coffee
+desktop app (copies `/give +100 @nalbert Thanks for the Workday extension #join-forces`), or buy a coffee
 once that page is set up.
 
 ## How it works (Approach A — DOM automation)

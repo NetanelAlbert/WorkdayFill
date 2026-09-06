@@ -15,6 +15,41 @@ async function saveSettings(settings: Settings): Promise<void> {
   await chrome.storage.sync.set({ settings });
 }
 
+/** User-provided bookmark to their own Enter Time page — never hardcoded, since the URL is
+ *  tenant- and possibly user-specific. Stored separately from Settings (a fill/delete config, not
+ *  a UI preference). */
+async function loadEnterTimeUrl(): Promise<string> {
+  const result = await chrome.storage.sync.get("enterTimeUrl");
+  return typeof result.enterTimeUrl === "string" ? result.enterTimeUrl : "";
+}
+
+async function saveEnterTimeUrl(url: string): Promise<void> {
+  await chrome.storage.sync.set({ enterTimeUrl: url });
+}
+
+/** Wires an (input, Go button) pair — shared by every empty-state that offers the Enter Time
+ *  shortcut. All instances read/write the same stored URL, so filling it in from one empty-state
+ *  carries over to the others on the next popup open. */
+async function wireEnterTimeShortcut(inputId: string, buttonId: string): Promise<void> {
+  const input = document.getElementById(inputId) as HTMLInputElement;
+  const button = document.getElementById(buttonId) as HTMLButtonElement;
+
+  input.value = await loadEnterTimeUrl();
+  button.disabled = input.value.trim() === "";
+  input.addEventListener("input", () => {
+    button.disabled = input.value.trim() === "";
+  });
+  input.addEventListener("change", () => {
+    void saveEnterTimeUrl(input.value.trim());
+  });
+  button.addEventListener("click", async () => {
+    const url = input.value.trim();
+    if (!url) return;
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.id) await chrome.tabs.update(tab.id, { url });
+  });
+}
+
 function readSettingsFromForm(): Settings {
   const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const throttleRaw = el<HTMLInputElement>("throttleMs").value;
@@ -134,6 +169,11 @@ function showSupportStatus(message: string): void {
   statusEl.textContent = message;
 }
 
+function pasteShortcutLabel(): string {
+  const platform = navigator.platform || "";
+  return /mac/i.test(platform) ? "⌘V" : "Ctrl+V";
+}
+
 function buyMeACoffeeHref(): string | null {
   if (!BUY_ME_A_COFFEE_URL) return null;
   try {
@@ -166,48 +206,60 @@ function wireSupportLinks(): void {
     link.hidden = false;
   }
 
+  const commandEl = document.getElementById("bonuslyCommand")!;
+  commandEl.textContent = BONUSLY_GIVE_COMMAND;
+
+  const pasteKey = pasteShortcutLabel();
+  const hintEl = document.getElementById("supportHint")!;
+  hintEl.textContent = `Then paste (${pasteKey}) in the chat and hit Enter.`;
+
+  const slackLink = document.getElementById("bonuslySupportLink") as HTMLAnchorElement;
   const slackHref = slackDesktopHref();
-  for (const link of document.querySelectorAll<HTMLAnchorElement>("a.bonusly-support")) {
-    if (!slackHref) {
-      link.removeAttribute("href");
-      continue;
-    }
-    link.href = slackHref;
-    link.addEventListener("click", () => {
-      void navigator.clipboard.writeText(BONUSLY_GIVE_COMMAND).then(
-        () => showSupportStatus("Copied the /give command — paste it in Slack and send."),
-        () => showSupportStatus(`In Slack, send: ${BONUSLY_GIVE_COMMAND}`),
-      );
-    });
+  if (!slackHref) {
+    slackLink.removeAttribute("href");
+    return;
   }
+  slackLink.href = slackHref;
+  slackLink.addEventListener("click", () => {
+    void navigator.clipboard.writeText(BONUSLY_GIVE_COMMAND).then(
+      () => showSupportStatus(`✓ Copied! Paste (${pasteKey}) in the chat and send.`),
+      () => showSupportStatus(`Message me in Slack: ${BONUSLY_GIVE_COMMAND}`),
+    );
+  });
+}
+
+function wireDisclosure(toggleId: string, panelId: string, shownDisplay = "flex"): void {
+  const toggle = document.getElementById(toggleId) as HTMLButtonElement;
+  const panel = document.getElementById(panelId)!;
+  toggle.addEventListener("click", () => {
+    const hidden = panel.style.display === "none";
+    panel.style.display = hidden ? shownDisplay : "none";
+    toggle.setAttribute("aria-expanded", String(hidden));
+  });
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
   const mainContent = document.getElementById("mainContent")!;
   const wrongSiteMessage = document.getElementById("wrongSiteMessage")!;
+  const notEnterTimeMessage = document.getElementById("notEnterTimeMessage")!;
   const selectorsStaleMessage = document.getElementById("selectorsStaleMessage")!;
-  const pageStatus = document.getElementById("pageStatus")!;
   const pageStatusText = document.getElementById("pageStatusText")!;
   const missingCount = document.getElementById("missingCount")!;
   const missingDaysContainer = document.getElementById("missingDays")!;
   const loadingEl = document.getElementById("loading")!;
   const fillAllButton = document.getElementById("fillAll") as HTMLButtonElement;
-  const toggleAdvancedButton = document.getElementById("toggleAdvanced")!;
-  const advancedPanel = document.getElementById("advancedPanel")!;
-  const toggleDaysButton = document.getElementById("toggleDays")!;
-  const aboutButton = document.getElementById("aboutButton")!;
-  const aboutInfo = document.getElementById("aboutInfo")!;
   const versionEl = document.getElementById("version")!;
   const userChip = document.getElementById("userChip")!;
   const progressContainer = document.getElementById("progressContainer")!;
-  const toggleDangerButton = document.getElementById("toggleDanger")!;
-  const dangerPanel = document.getElementById("dangerPanel")!;
   const deletableCountText = document.getElementById("deletableCountText")!;
   const deleteConfirmInput = document.getElementById("deleteConfirmInput") as HTMLInputElement;
   const deleteAllButton = document.getElementById("deleteAllButton") as HTMLButtonElement;
 
   versionEl.textContent = chrome.runtime.getManifest().version;
   wireSupportLinks();
+
+  await wireEnterTimeShortcut("enterTimeUrlInput", "openEnterTimeButton");
+  await wireEnterTimeShortcut("wrongSiteEnterTimeUrlInput", "wrongSiteOpenEnterTimeButton");
 
   let settings = await loadSettings();
   writeSettingsToForm(settings);
@@ -222,29 +274,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById(id)!.addEventListener("change", persistAndRefreshPreview);
   });
 
-  toggleAdvancedButton.addEventListener("click", () => {
-    const hidden = advancedPanel.style.display === "none";
-    advancedPanel.style.display = hidden ? "flex" : "none";
-    toggleAdvancedButton.textContent = hidden ? "Hide advanced settings" : "Show advanced settings";
-  });
-
-  toggleDaysButton.addEventListener("click", () => {
-    const hidden = missingDaysContainer.style.display === "none";
-    missingDaysContainer.style.display = hidden ? "flex" : "none";
-    toggleDaysButton.textContent = hidden ? "Hide days" : "Show days";
-  });
-
-  aboutButton.addEventListener("click", () => {
-    const hidden = aboutInfo.style.display === "none";
-    aboutInfo.style.display = hidden ? "block" : "none";
-    aboutButton.textContent = hidden ? "Hide about" : "About";
-  });
-
-  toggleDangerButton.addEventListener("click", () => {
-    const hidden = dangerPanel.style.display === "none";
-    dangerPanel.style.display = hidden ? "flex" : "none";
-    toggleDangerButton.textContent = hidden ? "Hide danger zone" : "Show danger zone";
-  });
+  wireDisclosure("toggleAdvanced", "advancedPanel");
+  wireDisclosure("toggleDays", "missingDays");
+  wireDisclosure("aboutButton", "aboutInfo", "block");
+  wireDisclosure("toggleDanger", "dangerPanel");
 
   deleteConfirmInput.addEventListener("input", () => {
     deleteAllButton.disabled = deleteConfirmInput.value !== "DELETE";
@@ -262,7 +295,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   wrongSiteMessage.style.display = "none";
 
-  async function loadMissingDays(): Promise<void> {
+  async function loadMissingDays(): Promise<boolean> {
     loadingEl.style.display = "block";
     missingDaysContainer.innerHTML = "";
     missingDaysContainer.appendChild(loadingEl);
@@ -272,19 +305,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (isErrorResponse(pageInfoResponse)) {
       if (pageInfoResponse.code === "SELECTORS_NOT_FOUND") {
         selectorsStaleMessage.style.display = "flex";
-        pageStatus.style.display = "none";
+        mainContent.style.display = "none";
         loadingEl.style.display = "none";
-        return;
+        return false;
       }
       throw new Error(pageInfoResponse.error);
     }
     if ("isEnterTime" in pageInfoResponse) {
       if (!pageInfoResponse.isEnterTime) {
-        pageStatus.className = "notice notice-neutral";
-        pageStatusText.textContent = "Open the Enter Time calendar to get started.";
+        notEnterTimeMessage.style.display = "flex";
+        mainContent.style.display = "none";
         loadingEl.style.display = "none";
-        return;
+        return false;
       }
+      notEnterTimeMessage.style.display = "none";
+      mainContent.style.display = "flex";
       const monthLabel = pageInfoResponse.month?.label ?? "the current month";
       pageStatusText.textContent = `Enter Time detected — ${monthLabel}`;
       if (pageInfoResponse.workerName) {
@@ -296,7 +331,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const response = await sendToContentScript({ action: "getMissingDays", settings });
     loadingEl.style.display = "none";
     if (isErrorResponse(response)) throw new Error(response.error);
-    if (!("missingDays" in response)) return;
+    if (!("missingDays" in response)) return true;
 
     const days = response.missingDays;
     missingCount.textContent = String(days.length);
@@ -306,13 +341,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       missingDaysContainer.innerHTML =
         '<div style="text-align:center;padding:8px;color:var(--success-dark);">No missing days found</div>';
       fillAllButton.disabled = true;
-      return;
+      return true;
     }
 
     days.forEach((date) => {
       missingDaysContainer.appendChild(createDayItem(date, settings, loadMissingDays));
     });
     fillAllButton.disabled = false;
+    return true;
   }
 
   async function loadDeletableCount(): Promise<void> {
@@ -386,9 +422,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   try {
-    mainContent.style.display = "flex";
-    await loadMissingDays();
-    await loadDeletableCount();
+    const isReady = await loadMissingDays();
+    if (isReady) await loadDeletableCount();
   } catch (error) {
     showStatus(`Failed to load: ${(error as Error).message}`, true);
   }

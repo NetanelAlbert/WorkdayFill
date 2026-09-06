@@ -16,21 +16,24 @@ function selectorsNotFoundResponse(missing: string[]): ErrorResponse {
 }
 
 async function handleRequest(request: Request): Promise<Response> {
+  // Page-detection actions must work everywhere on myworkday.com, including pages that are
+  // legitimately not Enter Time (e.g. the Workday home page) — detectPage() already reports
+  // isEnterTime: false gracefully in that case. Only actions that operate on the calendar itself
+  // need the CRITICAL selectors to actually resolve.
+  if (request.action === "getUserInfo") {
+    const { workerName } = engine.detectPage();
+    return { user: { displayName: workerName } };
+  }
+  if (request.action === "getPageInfo") {
+    return engine.detectPage();
+  }
+
   const validation = validateSelectors();
   if (!validation.ok) {
     return selectorsNotFoundResponse(validation.missing);
   }
 
   switch (request.action) {
-    case "getUserInfo": {
-      const { workerName } = engine.detectPage();
-      return { user: { displayName: workerName } };
-    }
-
-    case "getPageInfo": {
-      return engine.detectPage();
-    }
-
     case "getMissingDays": {
       const missingDays = await engine.getMissingDays(request.settings);
       return { missingDays };

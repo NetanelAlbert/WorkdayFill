@@ -198,12 +198,18 @@ function slackDesktopHref(): string | null {
 function wireSupportLinks(): void {
   const coffeeHref = buyMeACoffeeHref();
   for (const link of document.querySelectorAll<HTMLAnchorElement>("a.bmc-support")) {
+    const divider = link.previousElementSibling;
+    const dividerEl = divider instanceof HTMLElement && divider.classList.contains("support-divider")
+      ? divider
+      : null;
     if (!coffeeHref) {
       link.hidden = true;
+      if (dividerEl) dividerEl.hidden = true;
       continue;
     }
     link.href = coffeeHref;
     link.hidden = false;
+    if (dividerEl) dividerEl.hidden = false;
   }
 
   const commandEl = document.getElementById("bonuslyCommand")!;

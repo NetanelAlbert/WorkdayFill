@@ -13,12 +13,14 @@ export default defineManifest({
     default_popup: "src/popup/popup.html",
     default_icon: {
       16: "public/images/icon16.png",
+      32: "public/images/icon32.png",
       48: "public/images/icon48.png",
       128: "public/images/icon128.png",
     },
   },
   icons: {
     16: "public/images/icon16.png",
+    32: "public/images/icon32.png",
     48: "public/images/icon48.png",
     128: "public/images/icon128.png",
   },

@@ -42,6 +42,14 @@ jobs:
           npm version patch --no-git-tag-version
           echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
+      - name: Commit version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore: release v${{ steps.bump.outputs.version }} [skip ci]"
+          git push origin HEAD:master
+
       - name: Build extension
         run: npm run build
 
@@ -58,12 +66,7 @@ jobs:
           CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
           REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
 
-      - name: Commit version bump and tag
+      - name: Tag published release
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
-          git commit -m "chore: release v${{ steps.bump.outputs.version }} [skip ci]"
           git tag "v${{ steps.bump.outputs.version }}"
-          git push origin HEAD:master
           git push origin "v${{ steps.bump.outputs.version }}"

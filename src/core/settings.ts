@@ -5,7 +5,7 @@ export const DEFAULT_SETTINGS: Settings = {
   outTime: "17:36",
   timeType: "Hours Worked",
   comment: "",
-  dryRun: true,
+  dryRun: false,
   safeTestDate: null,
   throttleMs: 800,
   modalTimeoutMs: 8000,

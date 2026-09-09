@@ -7,7 +7,7 @@ export default defineManifest({
   version: pkg.version,
   description:
     "Unofficial tool to auto-fill missing attendance days in Workday's Enter Time calendar. Not affiliated with or endorsed by Workday.",
-  permissions: ["activeTab", "storage"],
+  permissions: ["storage"],
   host_permissions: ["https://*.myworkday.com/*"],
   action: {
     default_popup: "src/popup/popup.html",

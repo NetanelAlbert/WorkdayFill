@@ -20,6 +20,7 @@ import {
   findEnterTimeButton,
   findOkButton,
   findPopoverEntries,
+  findVisiblePopover,
   SELECTORS,
   TOAST_SAVED_TEXT,
 } from "../selectors";
@@ -321,7 +322,16 @@ export class DomFillEngine implements FillEngine {
 
     try {
       fireMouseSequence(chevron);
-      await waitForElement(SELECTORS.popoverCloseButton, { root: doc, timeout: 3000 });
+      // Wait for a VISIBLE popover. Can't use waitForElement(popover): a stale hidden popover from a
+      // prior skipped day is first in the DOM and waitForElement only checks the first match (hidden)
+      // — poll findVisiblePopover instead.
+      const popoverOpened = await pollUntil(() => findVisiblePopover(doc) !== null, {
+        timeout: 3000,
+        intervalMs: 100,
+      });
+      if (!popoverOpened) {
+        return { date, status: "error", message: "day popover did not open" };
+      }
 
       // The popover automation-id is shared by every cell on the page, so entries must be found
       // scoped to THIS popover (findPopoverEntries) and identified by their own accessible label
@@ -329,7 +339,10 @@ export class DomFillEngine implements FillEngine {
       // holiday/Time-Period-End rows that must not be touched.
       const entry = findPopoverEntries(doc).find((el) => el.getAttribute("aria-label")?.includes("Hours Worked"));
       if (!entry) {
-        doc.querySelector<HTMLElement>(SELECTORS.popoverCloseButton)?.click();
+        // Close the VISIBLE popover (a plain click only hides it — fine, findVisiblePopover ignores
+        // hidden ones — so the next day opens cleanly). Never query the close button document-wide: a
+        // stale hidden popover's button is first, and clicking it would leave this popover open.
+        findVisiblePopover(doc)?.querySelector<HTMLElement>(SELECTORS.popoverCloseButton)?.click();
         return { date, status: "skipped", message: "no Hours Worked entry for this day" };
       }
 

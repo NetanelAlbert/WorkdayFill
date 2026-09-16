@@ -353,13 +353,20 @@ export class DomFillEngine implements FillEngine {
       }
       deleteBtn.click();
 
-      const confirmModal = await waitForElement(SELECTORS.modal, { root: doc, timeout: 3000 });
-      if (!confirmModal.textContent?.includes("Delete Time Block")) {
+      // The confirmation reuses the `popUpDialog` automation-id, and the entry-edit dialog lingers for
+      // a beat after Delete is clicked before being replaced by the confirm (Workday's 2026.37 update
+      // slowed this swap). Grabbing the first `popUpDialog` immediately therefore caught the stale edit
+      // dialog and failed the title check. `waitForText` polls until the dialog whose text is actually
+      // the "Delete Time Block" confirm appears, ignoring the outgoing edit dialog.
+      let confirmModal: Element;
+      try {
+        confirmModal = await waitForText(SELECTORS.modal, "Delete Time Block", { root: doc, timeout: 5000 });
+      } catch {
         await cleanupModal(doc);
         return {
           date,
           status: "error",
-          message: "expected a 'Delete Time Block' confirmation dialog but got something else",
+          message: "expected a 'Delete Time Block' confirmation dialog but it didn't appear",
         };
       }
       const okBtn = findButtonByText(confirmModal, "OK");

@@ -1,10 +1,19 @@
+import type { Settings } from "../core/types";
 import type { ErrorResponse, ProgressMessage, Request, Response } from "../messaging/protocol";
 import { DomFillEngine } from "./engine/DomFillEngine";
+import type { FillEngine } from "./engine/FillEngine";
+import { FlowReplayEngine } from "./flow/FlowReplayEngine";
 import { validateSelectors } from "./selectors";
 
 console.log("[WorkdayFill] content script loading...");
 
-const engine = new DomFillEngine();
+const domEngine = new DomFillEngine();
+const flowEngine = new FlowReplayEngine();
+
+/** Picks the fill engine from settings. Deletes and page detection always use the DOM engine. */
+function fillEngineFor(settings: Settings): FillEngine {
+  return settings.engine === "flow" ? flowEngine : domEngine;
+}
 
 function selectorsNotFoundResponse(missing: string[]): ErrorResponse {
   return {
@@ -21,11 +30,11 @@ async function handleRequest(request: Request): Promise<Response> {
   // isEnterTime: false gracefully in that case. Only actions that operate on the calendar itself
   // need the CRITICAL selectors to actually resolve.
   if (request.action === "getUserInfo") {
-    const { workerName } = engine.detectPage();
+    const { workerName } = domEngine.detectPage();
     return { user: { displayName: workerName } };
   }
   if (request.action === "getPageInfo") {
-    return engine.detectPage();
+    return domEngine.detectPage();
   }
 
   const validation = validateSelectors();
@@ -35,12 +44,12 @@ async function handleRequest(request: Request): Promise<Response> {
 
   switch (request.action) {
     case "getMissingDays": {
-      const missingDays = await engine.getMissingDays(request.settings);
+      const missingDays = await fillEngineFor(request.settings).getMissingDays(request.settings);
       return { missingDays };
     }
 
     case "fillSingleDay": {
-      const result = await engine.fillDay(request.date, request.settings);
+      const result = await fillEngineFor(request.settings).fillDay(request.date, request.settings);
       if (result.status === "error") {
         console.error("[WorkdayFill] fillSingleDay failed:", result.date, result.message);
       } else {
@@ -50,7 +59,7 @@ async function handleRequest(request: Request): Promise<Response> {
     }
 
     case "fillAllDays": {
-      const summary = await engine.fillAllDays(request.settings, (percentage, result) => {
+      const summary = await fillEngineFor(request.settings).fillAllDays(request.settings, (percentage, result) => {
         if (result.status === "error") {
           console.error("[WorkdayFill] fillAllDays step failed:", result.date, result.message);
         } else {
@@ -71,12 +80,12 @@ async function handleRequest(request: Request): Promise<Response> {
     }
 
     case "getDeletableDays": {
-      const deletableDays = await engine.getDeletableDays();
+      const deletableDays = await domEngine.getDeletableDays();
       return { deletableDays };
     }
 
     case "deleteSingleDay": {
-      const result = await engine.deleteDay(request.date);
+      const result = await domEngine.deleteDay(request.date);
       if (result.status === "error") {
         console.error("[WorkdayFill] deleteSingleDay failed:", result.date, result.message);
       } else {
@@ -86,7 +95,7 @@ async function handleRequest(request: Request): Promise<Response> {
     }
 
     case "deleteAllDays": {
-      const summary = await engine.deleteAllDays((percentage, result) => {
+      const summary = await domEngine.deleteAllDays((percentage, result) => {
         if (result.status === "error") {
           console.error("[WorkdayFill] deleteAllDays step failed:", result.date, result.message);
         } else {

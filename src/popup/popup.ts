@@ -1,5 +1,5 @@
 import { computeHours } from "../core/time";
-import { DEFAULT_SETTINGS, mergeSettings } from "../core/settings";
+import { DEFAULT_SETTINGS, LEGACY_DEFAULT_THROTTLE_MS, mergeSettings } from "../core/settings";
 import type { Settings } from "../core/types";
 import { isErrorResponse, type ProgressMessage, type Request, type Response } from "../messaging/protocol";
 import { BONUSLY_GIVE_COMMAND, BUY_ME_A_COFFEE_URL, SLACK_URL } from "./support";
@@ -7,8 +7,15 @@ import { BONUSLY_GIVE_COMMAND, BUY_ME_A_COFFEE_URL, SLACK_URL } from "./support"
 const WORKDAY_HOST = "myworkday.com";
 
 async function loadSettings(): Promise<Settings> {
-  const result = await chrome.storage.sync.get("settings");
-  return mergeSettings(result.settings as Partial<Settings> | undefined);
+  const result = await chrome.storage.sync.get(["settings", "throttleMigrated"]);
+  const merged = mergeSettings(result.settings as Partial<Settings> | undefined);
+  // One-time migration: existing users still on the old default delay get the new (lower) default.
+  // Gated by a flag so it runs once — anyone who later sets the old value on purpose keeps it.
+  if (!result.throttleMigrated) {
+    if (merged.throttleMs === LEGACY_DEFAULT_THROTTLE_MS) merged.throttleMs = DEFAULT_SETTINGS.throttleMs;
+    await chrome.storage.sync.set({ settings: merged, throttleMigrated: true });
+  }
+  return merged;
 }
 
 async function saveSettings(settings: Settings): Promise<void> {
@@ -57,6 +64,7 @@ function readSettingsFromForm(): Settings {
     inTime: el<HTMLInputElement>("inTime").value || DEFAULT_SETTINGS.inTime,
     outTime: el<HTMLInputElement>("outTime").value || DEFAULT_SETTINGS.outTime,
     comment: el<HTMLInputElement>("comment").value,
+    engine: el<HTMLInputElement>("visibleMode").checked ? "dom" : "flow",
     dryRun: el<HTMLInputElement>("dryRun").checked,
     safeTestDate: el<HTMLInputElement>("safeTestDate").value || null,
     throttleMs: throttleRaw ? Number(throttleRaw) : DEFAULT_SETTINGS.throttleMs,
@@ -68,6 +76,7 @@ function writeSettingsToForm(settings: Settings): void {
   el<HTMLInputElement>("inTime").value = settings.inTime;
   el<HTMLInputElement>("outTime").value = settings.outTime;
   el<HTMLInputElement>("comment").value = settings.comment;
+  el<HTMLInputElement>("visibleMode").checked = settings.engine === "dom";
   el<HTMLInputElement>("dryRun").checked = settings.dryRun;
   el<HTMLInputElement>("safeTestDate").value = settings.safeTestDate ?? "";
   el<HTMLInputElement>("throttleMs").value = String(settings.throttleMs);
@@ -122,7 +131,12 @@ function dayStatusLabel(status: string): { text: string; className: string } {
   }
 }
 
-function createDayItem(date: string, settings: Settings, onDone: () => void): HTMLElement {
+function createDayItem(
+  date: string,
+  settings: Settings,
+  onDone: () => void,
+  onHeadlessFailure?: (reason: string) => void,
+): HTMLElement {
   const item = document.createElement("div");
   item.className = "day-item";
 
@@ -151,9 +165,11 @@ function createDayItem(date: string, settings: Settings, onDone: () => void): HT
         onDone();
       } else if (response.result.status === "error") {
         showStatus(`Failed to fill ${date}: ${response.result.message}`, true);
+        onHeadlessFailure?.(`Headless mode couldn't fill ${date}.`);
       }
     } catch (error) {
       showStatus(`Failed to fill ${date}: ${(error as Error).message}`, true);
+      onHeadlessFailure?.(`Headless mode couldn't fill ${date}.`);
       fillButton.disabled = false;
     }
   };
@@ -260,6 +276,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   const deletableCountText = document.getElementById("deletableCountText")!;
   const deleteConfirmInput = document.getElementById("deleteConfirmInput") as HTMLInputElement;
   const deleteAllButton = document.getElementById("deleteAllButton") as HTMLButtonElement;
+  const headlessFallback = document.getElementById("headlessFallback")!;
+  const headlessFallbackText = document.getElementById("headlessFallbackText")!;
+  const switchToVisibleButton = document.getElementById("switchToVisibleButton") as HTMLButtonElement;
+
+  /** Shows the "switch to Visible mode" prompt — only relevant while the headless engine is active. */
+  function suggestVisibleFallback(reason: string): void {
+    if (settings.engine !== "flow") return;
+    headlessFallbackText.textContent = `${reason} You can switch to Visible mode (drive the on-screen calendar) and try again.`;
+    headlessFallback.style.display = "flex";
+  }
+  function hideVisibleFallback(): void {
+    headlessFallback.style.display = "none";
+  }
 
   versionEl.textContent = chrome.runtime.getManifest().version;
   wireSupportLinks();
@@ -276,7 +305,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     await saveSettings(settings);
     updateHoursPreview(settings);
   };
-  ["inTime", "outTime", "comment", "dryRun", "safeTestDate", "throttleMs"].forEach((id) => {
+  ["inTime", "outTime", "comment", "visibleMode", "dryRun", "safeTestDate", "throttleMs"].forEach((id) => {
     document.getElementById(id)!.addEventListener("change", persistAndRefreshPreview);
   });
 
@@ -302,6 +331,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   wrongSiteMessage.style.display = "none";
 
   async function loadMissingDays(): Promise<boolean> {
+    hideVisibleFallback();
     loadingEl.style.display = "block";
     missingDaysContainer.innerHTML = "";
     missingDaysContainer.appendChild(loadingEl);
@@ -336,7 +366,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const response = await sendToContentScript({ action: "getMissingDays", settings });
     loadingEl.style.display = "none";
-    if (isErrorResponse(response)) throw new Error(response.error);
+    if (isErrorResponse(response)) {
+      suggestVisibleFallback("Headless mode couldn't load your calendar.");
+      throw new Error(response.error);
+    }
     if (!("missingDays" in response)) return true;
 
     const days = response.missingDays;
@@ -351,7 +384,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     days.forEach((date) => {
-      missingDaysContainer.appendChild(createDayItem(date, settings, loadMissingDays));
+      missingDaysContainer.appendChild(createDayItem(date, settings, loadMissingDays, suggestVisibleFallback));
     });
     fillAllButton.disabled = false;
     return true;
@@ -411,6 +444,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       await saveSettings(settings);
       const response = await sendToContentScript({ action: "fillAllDays", settings });
       if (isErrorResponse(response)) throw new Error(response.error);
+      // Nothing filled but failures — headless likely can't reach Workday; offer the fallback.
+      const allFailed =
+        "summary" in response && response.summary.filled === 0 && response.summary.failed > 0;
       if ("summary" in response) {
         const { summary } = response;
         showStatus(
@@ -418,12 +454,37 @@ document.addEventListener("DOMContentLoaded", async () => {
           summary.failed > 0,
         );
       }
-      await loadMissingDays();
+      await loadMissingDays(); // hides any prior fallback, then re-scans
+      if (allFailed) suggestVisibleFallback("Headless mode couldn't fill your days.");
     } catch (error) {
       showStatus(`Failed to fill all missing days: ${(error as Error).message}`, true);
+      suggestVisibleFallback("Headless mode couldn't fill your days.");
     } finally {
       fillAllButton.textContent = originalText;
       progressContainer.style.display = "none";
+    }
+  });
+
+  // Switching engines changes how missing days are detected (the headless engine reads worked hours
+  // from a fresh server fetch, the DOM engine from the rendered page), so re-scan on toggle. Runs
+  // after persistAndRefreshPreview has already updated `settings` from the form.
+  document.getElementById("visibleMode")!.addEventListener("change", () => {
+    void loadMissingDays().catch((error) => showStatus(`Failed to reload: ${(error as Error).message}`, true));
+  });
+
+  // The fallback banner's one-click action: turn on Visible mode, persist, and re-scan.
+  switchToVisibleButton.addEventListener("click", async () => {
+    (document.getElementById("visibleMode") as HTMLInputElement).checked = true;
+    settings = readSettingsFromForm();
+    await saveSettings(settings);
+    updateHoursPreview(settings);
+    hideVisibleFallback();
+    showStatus("Switched to Visible mode.");
+    try {
+      await loadMissingDays();
+      await loadDeletableCount();
+    } catch (error) {
+      showStatus(`Failed to reload: ${(error as Error).message}`, true);
     }
   });
 

@@ -91,6 +91,11 @@
 
       <div class="status" id="status"></div>
 
+      <div id="headlessFallback" class="notice notice-warning" style="display: none;">
+        <span id="headlessFallbackText"></span>
+        <button id="switchToVisibleButton" class="primary-button">Switch to Visible mode &amp; retry</button>
+      </div>
+
       <div id="progressContainer" style="display: none;">
         <div id="progressBar"></div>
       </div>
@@ -136,6 +141,19 @@
             <label for="throttleMs">Delay between days (ms)</label>
             <input type="number" id="throttleMs" min="0" step="100" />
           </div>
+
+          <label id="visibleModeToggle" class="dry-run-toggle">
+            <span class="dry-run-label">
+              <span class="dry-run-icon">&#128064;</span>
+              Visible mode — drive the calendar UI instead of Workday's API
+            </span>
+            <input type="checkbox" id="visibleMode" />
+          </label>
+          <p class="hint">
+            By default WorkdayFill fills via Workday's API with no page automation (fast, no modals).
+            Turn on Visible mode to fall back to driving the on-screen calendar — slower, but useful if
+            the fast mode can't reach Workday's data. Deletes always use Visible mode.
+          </p>
 
           <div class="advanced-divider"></div>
 

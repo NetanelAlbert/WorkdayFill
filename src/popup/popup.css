@@ -118,6 +118,12 @@ body {
   color: var(--danger);
 }
 
+/* Headless→Visible fallback prompt: stack the message above its action button. */
+#headlessFallback {
+  flex-direction: column;
+  align-items: stretch;
+}
+
 .empty-state {
   display: flex;
   flex-direction: column;

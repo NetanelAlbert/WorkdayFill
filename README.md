@@ -18,15 +18,38 @@ page**: for each empty weekday it clicks the calendar cell, types In/Out, and cl
 JavaScript then emits all the correct flow/token requests. No token or flow-key management needed.
 
 The codebase is split so the decision logic is pure and unit-tested, while all DOM interaction is
-isolated behind a `FillEngine` interface (`src/content/engine/`) — leaving room for a future headless
-`FlowReplayEngine` (Approach B) once the WebFlow responses are captured (RESEARCH.md §6).
+isolated behind a `FillEngine` interface (`src/content/engine/`). There are two interchangeable
+implementations of that interface (see below).
 
 ```
-src/core/      pure logic — no DOM — unit tested (missing-day rules, time math, settings)
-src/content/   the content script: selectors, DOM wait/scan helpers, the DomFillEngine, RPC listener
-src/popup/     the extension popup UI
-src/messaging/ the typed request/response contract shared by popup ↔ content script
+src/core/         pure logic — no DOM — unit tested (missing-day rules, time math, settings)
+src/content/      the content script: selectors, DOM wait/scan helpers, the DomFillEngine, RPC listener
+src/content/flow/ the headless FlowReplayEngine (Approach B) + its pure parsers (unit tested)
+src/popup/        the extension popup UI
+src/messaging/    the typed request/response contract shared by popup ↔ content script
 ```
+
+## How it works (Approach B — headless API replay, the default)
+
+`FlowReplayEngine` (`src/content/flow/`) is the **default** engine (`settings.engine = "flow"`). Instead
+of driving the page, it replays Workday's Enter Time flow with direct `fetch` calls — **no modal opens,
+nothing is typed or clicked**, mirroring HibobFill's clean-API approach. Per day it: fetches the
+calendar model, opens the day's flow (`/axon/button/…`), validates In then Out, and submits OK
+(`/axon/flowController`), parsing the dynamic flow key + field/button ids out of each response. This was
+fully reverse-engineered and verified live — see [RESEARCH.md](RESEARCH.md) §7 for the captured payloads
+and the exact mechanism.
+
+If headless can't reach Workday's data (or a fill fails), the popup surfaces a **"Switch to Visible
+mode & retry"** prompt that flips `settings.engine` to `"dom"` (Approach A above). You can also toggle it
+manually under **Advanced → Visible mode**. Deletes always use the DOM engine.
+
+Everything it needs is obtained from the isolated content-script world (no MAIN-world injection): the
+calendar-model URL from `performance.getEntriesByType('resource')`, the `X-Workday-Client` version from
+the page HTML, and the session-secure token from the (cookie-authenticated) calendar model response.
+Because a headless write doesn't re-render the page, "which days are already filled" is read from a
+fresh model fetch (server truth), while the stable day classification (weekend/holiday/time-off) still
+comes from the DOM scan. **Deletes always use the DOM engine** (the delete flow isn't implemented
+headlessly yet).
 
 ## Build & test
 

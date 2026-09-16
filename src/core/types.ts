@@ -30,11 +30,20 @@ export interface FillOptions {
   today: string;
 }
 
+/**
+ * Which fill strategy to use:
+ *  - "dom":  drive the real Enter Time page (DomFillEngine, Approach A) — proven, but UI-coupled.
+ *  - "flow": headless flowController replay (FlowReplayEngine, Approach B) — no UI, see RESEARCH.md §7.
+ * Deletes always use the DOM engine regardless (headless delete isn't implemented).
+ */
+export type EngineKind = "dom" | "flow";
+
 export interface Settings {
   inTime: string;
   outTime: string;
   timeType: string;
   comment: string;
+  engine: EngineKind;
   dryRun: boolean;
   /** When set, only this date may be written to — a development safety rail. */
   safeTestDate: string | null;

@@ -30,6 +30,14 @@ export default defineManifest({
       js: ["src/content/content.ts"],
       run_at: "document_idle",
     },
+    {
+      // MAIN-world helper for the headless engine: captures Workday's calendar-model URL at
+      // document_start so the isolated content script can read it (see src/content/main-world.ts).
+      matches: ["https://*.myworkday.com/*"],
+      js: ["src/content/main-world.ts"],
+      run_at: "document_start",
+      world: "MAIN",
+    },
   ],
   background: {
     service_worker: "src/background.ts",

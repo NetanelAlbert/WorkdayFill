@@ -68,7 +68,14 @@ export const SELECTORS = {
    * automation-id across every day cell — must be matched to the target cell by position.
    */
   dayChevron: '[data-automation-id="calendarMoreLink"]',
-  /** The popover's own close (X) button — its parent element is the popover's scope. */
+  /**
+   * The day popover's container. CRITICAL (confirmed live, Workday 2026.37): closing a popover only
+   * HIDES it — the element stays in the DOM (offsetParent === null). Popover queries must be scoped to
+   * the *visible* container, never "first in the DOM", or a stale hidden popover from a prior day
+   * poisons the scope and every following delete skips (see findVisiblePopover).
+   */
+  popover: '[data-automation-id="calendarMoreLinkPopup"]',
+  /** The popover's own close (X) button. Scope to the visible popover, never document-wide. */
   popoverCloseButton: '[data-automation-id="closeButton"]',
   /**
    * An entry row inside an open popover. CRITICAL: this automation-id is shared by EVERY entry
@@ -164,9 +171,21 @@ export function findChevronForCell(cellEl: Element, doc: Document): HTMLElement 
  * Returns the entry rows inside a currently-open popover, scoped via the popover's own close
  * button — never search `popoverEntry` document-wide (see its comment above).
  */
+/**
+ * The currently-open (visible) day popover. Workday keeps *closed* popovers in the DOM but hidden
+ * (offsetParent === null), so filter to the visible one — the most recently opened — rather than
+ * trusting document order (a stale hidden popover from a prior day would otherwise win, which made
+ * bulk delete skip every day after the first holiday it hit).
+ */
+export function findVisiblePopover(doc: Document): HTMLElement | null {
+  const visible = [...doc.querySelectorAll<HTMLElement>(SELECTORS.popover)].filter(
+    (el) => el.offsetParent !== null,
+  );
+  return visible[visible.length - 1] ?? null;
+}
+
 export function findPopoverEntries(doc: Document): HTMLElement[] {
-  const closeBtn = doc.querySelector<HTMLElement>(SELECTORS.popoverCloseButton);
-  const popover = closeBtn?.parentElement;
+  const popover = findVisiblePopover(doc);
   if (!popover) return [];
   return [...popover.querySelectorAll<HTMLElement>(SELECTORS.popoverEntry)];
 }

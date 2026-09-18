@@ -13,8 +13,16 @@ import { splitTimeParts, todayLocalIso } from "../../core/time";
 export interface ModelDay {
   /** ISO date, e.g. '2026-09-24'. */
   date: string;
-  /** Worked hours the model reports for the day (0 when empty). Used to confirm a write committed. */
-  totalHours: number;
+  /**
+   * Worked hours the model reports for the day, or **null when they couldn't be read**.
+   *
+   * `null` is deliberately distinct from `0`. Every consumer uses this to decide whether it's safe to
+   * WRITE a new entry, so "the model says this day is empty" and "we failed to parse this day" must
+   * never collapse into the same value — otherwise a parser regression silently turns every already
+   * filled day into a fillable one and a single run duplicates the whole month. Unknown is therefore
+   * treated as "already has an entry" everywhere (fail closed). See `modelHoursUnreadable`.
+   */
+  totalHours: number | null;
   /**
    * The per-cell "Enter Time" open action URI (no `.htmld` suffix), e.g. `/axon/button/c0/454/1320`.
    * Regenerated on every calendar render, so it is only valid for the model fetch it came from.
@@ -66,6 +74,41 @@ export function parseFormattedDateFull(full: string): string | null {
   const monthIndex = MONTH_NAMES.findIndex((name) => name === m[1]);
   if (monthIndex < 0) return null;
   return `${m[3]}-${String(monthIndex + 1).padStart(2, "0")}-${String(Number(m[2])).padStart(2, "0")}`;
+}
+
+/** Workday renders a day's hours as a numeric widget carrying both a `value` and a display `text`. */
+interface HoursCell {
+  value?: unknown;
+  text?: unknown;
+}
+
+/**
+ * Reads a day's worked hours, or null if they can't be established.
+ *
+ * A returned `0` must come from Workday actually saying zero — never from a missing or unparseable
+ * field (see `ModelDay.totalHours` for why that distinction is load-bearing). `text` is accepted as a
+ * secondary source so a change to `value` alone doesn't make every day unreadable.
+ */
+function readHours(cell: HoursCell | undefined): number | null {
+  if (!cell) return null;
+  if (typeof cell.value === "number" && Number.isFinite(cell.value)) return cell.value;
+  if (typeof cell.text === "string" && cell.text.trim() !== "") {
+    const fromText = Number(cell.text);
+    if (Number.isFinite(fromText)) return fromText;
+  }
+  return null;
+}
+
+/**
+ * Model-side analogue of `validateSelectors()`: true when the model produced day cells but **not one**
+ * had readable hours — the signature of Workday reshaping the calendar payload.
+ *
+ * Callers abort the run instead of proceeding, because "no day has hours" is indistinguishable from
+ * "every day is empty" and the latter would mass-duplicate entries. Requiring *all* days to be
+ * unreadable keeps this from false-firing on individual odd cells, which fail closed on their own.
+ */
+export function modelHoursUnreadable(days: ModelDay[]): boolean {
+  return days.length > 0 && days.every((day) => day.totalHours === null);
 }
 
 /**
@@ -126,10 +169,9 @@ export function parseCalendarDays(modelJson: string): ModelDay[] {
       const date = parseFormattedDateFull(formatted.value);
       if (date && !seen.has(date)) {
         seen.add(date);
-        const total = (obj.totalForDay as { value?: unknown } | undefined)?.value;
         days.push({
           date,
-          totalHours: typeof total === "number" ? total : Number(total) || 0,
+          totalHours: readHours(obj.totalForDay as HoursCell | undefined),
           openUri: firstEnterTimeUri(obj),
         });
       }

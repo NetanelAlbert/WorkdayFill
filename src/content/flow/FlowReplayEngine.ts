@@ -70,10 +70,12 @@ export class FlowReplayEngine implements FillEngine {
     const hoursByDate = new Map(days.map((d) => [d.date, d.totalHours]));
     const uriByDate = new Map(days.filter((d) => d.openUri).map((d) => [d.date, d.openUri!]));
     // Override each cell's (stale) DOM hasEntry with the model's authoritative worked-hours fact.
-    const cells = scanCalendar(this.doc).map((cell) => ({
-      ...cell,
-      hasEntry: (hoursByDate.get(cell.date) ?? 0) > 0,
-    }));
+    // Fail closed: a day the model doesn't list (undefined) or whose hours we couldn't read (null)
+    // counts as already having an entry, so uncertainty can never turn into a duplicate write.
+    const cells = scanCalendar(this.doc).map((cell) => {
+      const hours = hoursByDate.get(cell.date);
+      return { ...cell, hasEntry: hours == null ? true : hours > 0 };
+    });
     return computeMissingDays(cells, { ...DEFAULT_FILL_OPTIONS, today: todayLocalIso() })
       .filter((date) => uriByDate.has(date))
       .filter((date) => !settings.safeTestDate || date === settings.safeTestDate);
@@ -117,7 +119,15 @@ export class FlowReplayEngine implements FillEngine {
     if (!modelDay) {
       return { date, status: "error", message: "day not present in the calendar model (wrong month shown?)" };
     }
-    // Authoritative double-fill guard, from fresh server state rather than the stale DOM.
+    // Authoritative double-fill guard, from fresh server state rather than the stale DOM. Unreadable
+    // hours are NOT treated as "empty" — that's the one mistake that could duplicate a real entry.
+    if (modelDay.totalHours === null) {
+      return {
+        date,
+        status: "error",
+        message: "couldn't read this day's hours from Workday — skipped so an existing entry isn't duplicated",
+      };
+    }
     if (modelDay.totalHours > 0) {
       return { date, status: "skipped", message: "already has an entry" };
     }
@@ -160,8 +170,18 @@ export class FlowReplayEngine implements FillEngine {
 
     if (verify) {
       const fresh = await this.freshModel(ctx);
-      const committed = ((fresh?.days.find((d) => d.date === date))?.totalHours ?? 0) > 0;
-      if (!committed) {
+      const hours = fresh?.days.find((d) => d.date === date)?.totalHours;
+      if (hours == null) {
+        // The entry may well have landed — we just can't read the day back. Report that honestly
+        // instead of claiming either success or failure. Planning fails closed on unreadable hours,
+        // so this day won't be silently re-filled on a later run.
+        return {
+          date,
+          status: "error",
+          message: "submitted, but couldn't confirm it — check this day in Workday before retrying",
+        };
+      }
+      if (hours === 0) {
         return { date, status: "error", message: "save did not appear to commit (day still shows no hours)" };
       }
     }
@@ -226,7 +246,11 @@ export class FlowReplayEngine implements FillEngine {
     if (fresh) {
       const hoursByDate = new Map(fresh.days.map((d) => [d.date, d.totalHours]));
       for (const date of filledDates) {
-        if ((hoursByDate.get(date) ?? 0) === 0) {
+        const hours = hoursByDate.get(date);
+        if (hours == null) {
+          filled -= 1;
+          failures.push({ date, message: "submitted, but couldn't confirm it — check this day in Workday" });
+        } else if (hours === 0) {
           filled -= 1;
           failures.push({ date, message: "save did not appear to commit" });
         }

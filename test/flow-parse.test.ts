@@ -7,6 +7,7 @@ import {
   extractClientVersion,
   extractSessionSecureToken,
   hasFlowError,
+  modelHoursUnreadable,
   parseCalendarDays,
   parseFormattedDateFull,
   parseOpenResponse,
@@ -102,6 +103,74 @@ describe("parseCalendarDays", () => {
 
   it("returns [] on malformed JSON instead of throwing", () => {
     expect(parseCalendarDays("not json")).toEqual([]);
+  });
+});
+
+/** Builds a one-cell model whose `totalForDay` widget is exactly `hoursCell`. */
+function modelWithHoursCell(hoursCell: unknown): string {
+  return JSON.stringify({
+    widget: "root",
+    children: [
+      {
+        widget: "calendarDay",
+        formattedDateFull: { widget: "text", value: "Thursday, September 24, 2026" },
+        ...(hoursCell === undefined ? {} : { totalForDay: hoursCell }),
+        children: [
+          { widget: "commandButton", label: "Enter Time", values: [{ uri: "/axon/button/c13/450/1316" }] },
+        ],
+      },
+    ],
+  });
+}
+
+const hoursOf = (model: string) => parseCalendarDays(model)[0]!.totalHours;
+
+// These guard the distinction the whole write path depends on: "Workday says zero hours" must never
+// be produced by a failure to read the field. If unknown ever collapses back to 0, an already-filled
+// day looks fillable and a run duplicates entries.
+describe("parseCalendarDays — hours are null when unreadable, never 0", () => {
+  it("keeps a real zero as 0", () => {
+    expect(hoursOf(modelWithHoursCell({ widget: "number", value: 0, text: "0" }))).toBe(0);
+  });
+
+  it("reads a real value", () => {
+    expect(hoursOf(modelWithHoursCell({ widget: "number", value: 8.6, text: "8.6" }))).toBe(8.6);
+  });
+
+  it("returns null when totalForDay is missing entirely", () => {
+    expect(hoursOf(modelWithHoursCell(undefined))).toBeNull();
+  });
+
+  it("returns null when the value is present but unparseable and there is no text", () => {
+    expect(hoursOf(modelWithHoursCell({ widget: "number", value: "not-a-number" }))).toBeNull();
+  });
+
+  it("falls back to the display text when value is gone (survives a partial shape change)", () => {
+    expect(hoursOf(modelWithHoursCell({ widget: "number", text: "8.6" }))).toBe(8.6);
+  });
+
+  it("returns null when neither value nor text is usable", () => {
+    expect(hoursOf(modelWithHoursCell({ widget: "number", text: "" }))).toBeNull();
+  });
+});
+
+describe("modelHoursUnreadable", () => {
+  const day = (totalHours: number | null) => ({ date: "2026-09-24", totalHours, openUri: null });
+
+  it("flags a payload where no day has readable hours (format changed)", () => {
+    expect(modelHoursUnreadable([day(null), day(null)])).toBe(true);
+  });
+
+  it("does not flag when at least one day is readable (isolated odd cell)", () => {
+    expect(modelHoursUnreadable([day(null), day(0)])).toBe(false);
+  });
+
+  it("does not flag an all-zero month — that is a legitimately empty calendar", () => {
+    expect(modelHoursUnreadable([day(0), day(0)])).toBe(false);
+  });
+
+  it("does not flag an empty day list (a different failure the caller handles)", () => {
+    expect(modelHoursUnreadable([])).toBe(false);
   });
 });
 

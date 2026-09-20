@@ -9,7 +9,14 @@
  */
 
 import { WorkdayFlowClient } from "./WorkdayFlowClient";
-import { buildDateToOpenUri, extractClientVersion, extractSessionSecureToken, parseCalendarDays, type ModelDay } from "./parse";
+import {
+  buildDateToOpenUri,
+  extractClientVersion,
+  extractSessionSecureToken,
+  modelHoursUnreadable,
+  parseCalendarDays,
+  type ModelDay,
+} from "./parse";
 
 const URL_ATTR = "data-wf-model-url";
 const METHOD_ATTR = "data-wf-model-method";
@@ -91,6 +98,15 @@ export async function bootstrapFlowContext(
   }
 
   const days = parseCalendarDays(model.text);
+  // Model-side equivalent of validateSelectors(): if Workday reshaped the payload, every day reads as
+  // "no hours", which is indistinguishable from "every day is empty" — and acting on that would
+  // duplicate entries across the whole month. Refuse to run instead.
+  if (modelHoursUnreadable(days)) {
+    throw new FlowBootstrapError(
+      "Workday's calendar data format changed — WorkdayFill can't tell which days are already filled, " +
+        "so it stopped rather than risk duplicate entries. Use Visible mode, or update the extension.",
+    );
+  }
   const dateToUri = buildDateToOpenUri(days);
   const client = new WorkdayFlowClient(token, clientVersion, location.origin, fetchImpl);
 
